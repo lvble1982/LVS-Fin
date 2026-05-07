@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <!-- iOS 全屏设置 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>个人资产看板</title>
+    
+    <!-- 引入 Tailwind CSS (样式) 和 Supabase SDK (功能) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+        body { background-color: #0f172a; color: white; -webkit-tap-highlight-color: transparent; }
+        .safe-area-inset { padding-top: env(safe-area-inset-top); }
+    </style>
+</head>
+<body class="safe-area-inset p-4">
+
+    <!-- 1. 总览区域 -->
+    <div class="mt-8 mb-8 text-center">
+        <h1 class="text-gray-400 text-sm uppercase tracking-widest">总资产估值</h1>
+        <div class="text-4xl font-bold mt-2" id="totalAmount">¥ 0.00</div>
+    </div>
+
+    <!-- 2. 快速输入区域 -->
+    <div class="bg-gray-800 rounded-2xl p-6 mb-6 shadow-xl">
+        <h2 class="text-lg font-semibold mb-4 text-blue-400">新增记录</h2>
+        <div class="space-y-4">
+            <input id="assetName" type="text" placeholder="资产名称 (如: 招商银行)" class="w-full bg-gray-700 border-none rounded-lg p-3 text-white">
+            <div class="flex gap-2">
+                <input id="amount" type="number" placeholder="金额" class="flex-1 bg-gray-700 border-none rounded-lg p-3 text-white">
+                <select id="category" class="bg-gray-700 border-none rounded-lg p-3 text-white">
+                    <option value="现金">现金</option>
+                    <option value="股票">股票</option>
+                    <option value="理财">理财</option>
+                </select>
+            </div>
+            <button onclick="saveData()" id="saveBtn" class="w-full bg-blue-600 hover:bg-blue-500 py-3 rounded-lg font-bold transition">保存记录</button>
+        </div>
+    </div>
+
+    <!-- 3. AI 分析区域 -->
+    <div class="bg-indigo-900/40 border border-indigo-500/30 rounded-2xl p-6 mb-6">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-lg font-semibold text-indigo-300">AI 财务洞察</h2>
+            <button onclick="runAI()" class="text-xs bg-indigo-500 px-3 py-1 rounded-full">开始分析</button>
+        </div>
+        <p id="aiReport" class="text-sm text-indigo-100 leading-relaxed">点击按钮，让 AI 分析你的资产配置...</p>
+    </div>
+
+    <script>
+        // 配置你的 Supabase 密钥
+        const SUPABASE_URL = 'https://aktqnpprcrcmohxkszyf.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFrdHFucHByY3JjbW9oeGtzenlmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxMTgwOTIsImV4cCI6MjA5MzY5NDA5Mn0.ryap-vfv9qicsTA5TZsrNG7JPqzowVgNBd3VFYS7JN0';
+        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // 页面加载时自动获取数据
+        window.onload = fetchData;
+
+        // 获取数据并刷新页面
+        async function fetchData() {
+            const { data, error } = await _supabase
+                .from('assets')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (data) {
+                const total = data.reduce((sum, item) => sum + parseFloat(item.amount), 0);
+                document.getElementById('totalAmount').innerText = '¥ ' + total.toLocaleString();
+                // 这里可以存储 data 供 AI 使用
+                window.currentAssets = data;
+            }
+        }
+
+        // 保存数据
+        async function saveData() {
+            const btn = document.getElementById('saveBtn');
+            const name = document.getElementById('assetName').value;
+            const amt = document.getElementById('amount').value;
+            const cat = document.getElementById('category').value;
+
+            if (!name || !amt) return alert('请填写名称和金额');
+
+            btn.disabled = true;
+            btn.innerText = '保存中...';
+
+            const { error } = await _supabase
+                .from('assets')
+                .insert([{ asset_name: name, amount: amt, category: cat }]);
+
+            if (error) {
+                alert('保存失败');
+            } else {
+                document.getElementById('assetName').value = '';
+                document.getElementById('amount').value = '';
+                fetchData(); // 刷新数字
+            }
+            btn.disabled = false;
+            btn.innerText = '保存记录';
+        }
+
+        // AI 分析逻辑 (下一阶段接入 Gemini API)
+async function runAI() {
+    const reportBox = document.getElementById('aiReport');
+    // 检查是否有数据
+    if (!window.currentAssets || window.currentAssets.length === 0) {
+        reportBox.innerText = "先存点数据，AI 才能分析哦！";
+        return;
+    }
+
+    reportBox.innerText = "✨ AI 正在审阅您的账本...";
+
+    const GEMINI_API_KEY = AIzaSyA4-E3ev2EZCy0Ir5iQD-nAqV7SHHqjrmg; // 填入你的 Gemini Key
+    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+    // 整理发送给 AI 的数据
+    const dataSummary = window.currentAssets.map(a => `${a.category}: ${a.asset_name} ${a.amount}元`).join('\n');
+    
+    const prompt = {
+        contents: [{
+            parts: [{
+                text: `你是一位资深理财专家。这是我的个人资产数据：\n${dataSummary}\n请用简短的3句话给我分析：1.资产分布现状；2.潜在风险点；3.改进建议。请使用亲切幽默的口吻。`
+            }]
+        }]
+    };
+
+    try {
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            body: JSON.stringify(prompt)
+        });
+        const result = await response.json();
+        const aiText = result.candidates[0].content.parts[0].text;
+        reportBox.innerText = aiText;
+    } catch (error) {
+        reportBox.innerText = "AI 睡着了，请检查网络或 API Key。";
+        console.error(error);
+    }
+}
+    </script>
+</body>
+</html>
